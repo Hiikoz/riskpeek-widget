@@ -11,7 +11,7 @@ A free iPhone widget for MetaTrader 5 traders, built for prop firm accounts. It 
 
 ```
  ┌──────────────────────────────────────┐
- │ MT5 · 2 pos · numbers at 14:32       │
+ │ MT5 · 2 pos                 🔄 14:32 │
  │ ▼ −479.50 $                          │
  │ DL 900 / 5,000 ▰▱▱▱▱▱▱▱              │
  └──────────────────────────────────────┘
@@ -92,7 +92,8 @@ Link your MT5 account to [Myfxbook](https://www.myfxbook.com) (free) with the in
 ## Good to know
 
 - **iOS limits widget refreshes**, usually every 5 to 15 minutes depending on usage and battery. The script asks every 60 s, iOS decides. Tapping the widget opens Scriptable and refreshes at once.
-- The header shows the time of the numbers. A ⚠︎ appears if they are more than 5 minutes old or if the network failed; the last known values stay on screen.
+- The header shows 🔄 and the time of the last refresh. A ⚠︎ appears if the numbers are more than 5 minutes old or if the network failed; the last known values stay on screen.
+- **Colors**: home screen widgets are in color (P&L, risk bars, positions). iOS always shows lock screen widgets in monochrome.
 - **Security**: the EA has no trading code. The iPhone uses the Read-Only token, so even if it leaks, nobody can change your data. Never share your tokens.
 
 This widget displays information only and is not financial advice. Trading involves substantial risk of loss. MetaTrader is a trademark of MetaQuotes Ltd; this project is not affiliated with MetaQuotes or any prop firm.
@@ -124,4 +125,4 @@ Il est en **lecture seule** : l'EA n'ouvre, ne ferme et ne modifie aucun trade.
 
 **Sans ordinateur** : mode Myfxbook (compte MT5 relié à Myfxbook avec le mot de passe investisseur). Rien à installer, mais 5 à 20 minutes de retard, sans P&L du jour ni jauges de risque.
 
-**À savoir** : iOS rafraîchit les widgets en général toutes les 5 à 15 minutes ; toucher le widget force l'actualisation. Le widget affiche des informations et ne constitue pas un conseil financier. Le trading comporte un risque important de perte.
+**À savoir** : iOS rafraîchit les widgets en général toutes les 5 à 15 minutes ; toucher le widget force l'actualisation. L'en-tête affiche 🔄 et l'heure de la dernière actualisation. Les widgets de l'écran d'accueil sont en couleurs ; iOS affiche toujours ceux de l'écran verrouillé en monochrome. Le widget affiche des informations et ne constitue pas un conseil financier. Le trading comporte un risque important de perte.

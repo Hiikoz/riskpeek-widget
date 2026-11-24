@@ -109,7 +109,6 @@ const TEXT = {
     wipe: "Erase everything (sign out)",
     close: "Close",
     pos: "pos",
-    numbersAt: "numbers at",
     day: "Day",
     eq: "Eq",
     dl: "Daily loss left",
@@ -172,7 +171,6 @@ const TEXT = {
     wipe: "Tout effacer (déconnexion)",
     close: "Fermer",
     pos: "pos",
-    numbersAt: "chiffres de",
     day: "Jour",
     eq: "Éq",
     dl: "Perte jour restante",
@@ -660,14 +658,30 @@ function compact(n) {
   return s + Math.round(abs);
 }
 
+// Colors (home screen widgets; iOS shows lock screen widgets in monochrome)
+const THEME = {
+  bgTop: new Color("#0b1320"),
+  bgBottom: new Color("#05070b"),
+  accent: new Color("#2fe08a"),
+  text: Color.white(),
+  muted: new Color("#8b95a5"),
+  track: new Color("#ffffff", 0.12),
+  green: new Color("#30D158"),
+  red: new Color("#FF453A"),
+  amber: new Color("#FFD60A"),
+  buy: new Color("#18b6ff"),
+  sell: new Color("#ff9f0a"),
+};
+const REFRESH = "🔄";
+
 const cur = (d) => CURRENCY_SYMBOLS[d.currency] || d.currency || "";
-const pnlColor = (n) => (n > 0 ? new Color("#30D158") : n < 0 ? new Color("#FF453A") : Color.gray());
+const pnlColor = (n) => (n > 0 ? THEME.green : n < 0 ? THEME.red : THEME.muted);
 const arrow = (n) => (n > 0 ? "▲" : n < 0 ? "▼" : "■");
 const isStale = (d) => Date.now() / 1000 - d.ts > (CONFIG.staleAfterMin[activeBackend()] || 5) * 60;
 
 // Share of the limit still available (0 to 1), and its color
 const ratio = (r) => (r && r.limit > 0 ? Math.max(0, Math.min(1, r.room / r.limit)) : null);
-const riskColor = (q) => (q === null ? Color.gray() : q < 0.25 ? new Color("#FF453A") : q < 0.45 ? new Color("#FFD60A") : new Color("#30D158"));
+const riskColor = (q) => (q === null ? THEME.muted : q < 0.25 ? THEME.red : q < 0.45 ? THEME.amber : THEME.green);
 const bar = (q, n = 8) => {
   const full = Math.round((q || 0) * n);
   return "▰".repeat(full) + "▱".repeat(n - full);
@@ -679,9 +693,28 @@ const hm = (ms) => {
   const d = new Date(ms);
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
-// Time of the numbers (source) and of the last widget refresh
-const dataTime = (d) => hm(d.ts * 1000);
+// Time of the last widget refresh, with a warning if the numbers are old
 const runTime = (d) => (d.fetchedAt ? hm(d.fetchedAt) : "?");
+const refreshLabel = (d, error) => `${error || isStale(d) ? "⚠︎ " : ""}${REFRESH} ${runTime(d)}`;
+
+// Rounded progress bar drawn as an image (home screen widgets)
+function barImage(q, width, color) {
+  const h = 6;
+  const ctx = new DrawContext();
+  ctx.size = new Size(width, h);
+  ctx.opaque = false;
+  ctx.respectScreenScale = true;
+  const pill = (w, c) => {
+    const p = new Path();
+    p.addRoundedRect(new Rect(0, 0, w, h), h / 2, h / 2);
+    ctx.addPath(p);
+    ctx.setFillColor(c);
+    ctx.fillPath();
+  };
+  pill(width, THEME.track);
+  if (q > 0) pill(Math.max(h, width * q), color);
+  return ctx.getImage();
+}
 
 // ----------------------------- WIDGETS -------------------------------
 
@@ -735,15 +768,15 @@ function rectangularWidget(d, error) {
 
   const head = w.addStack();
   head.centerAlignContent();
-  const title = head.addText(`MT5 · ${d.count} ${L.pos} · ${L.numbersAt} ${dataTime(d)}`);
+  const title = head.addText(`MT5 · ${d.count} ${L.pos}`);
   title.font = Font.semiboldSystemFont(11);
   title.textOpacity = 0.7;
   title.lineLimit = 1;
-  title.minimumScaleFactor = 0.8;
-  if (error || isStale(d)) {
-    const warn = head.addText(" ⚠︎");
-    warn.font = Font.systemFont(11);
-  }
+  head.addSpacer();
+  const time = head.addText(refreshLabel(d, error));
+  time.font = Font.semiboldSystemFont(11);
+  time.textOpacity = 0.7;
+  time.lineLimit = 1;
 
   const v = w.addText(`${arrow(d.floating)} ${fmt(d.floating)} ${cur(d)}`);
   v.font = Font.boldRoundedSystemFont(20);
@@ -757,7 +790,6 @@ function rectangularWidget(d, error) {
     const parts = [];
     if (d.today !== null && d.today !== undefined) parts.push(`${L.day} ${fmt(d.today)}`);
     parts.push(`${L.eq} ${money0(d.equity)}`);
-    parts.push(`↻ ${runTime(d)}`);
     line = parts.join(" · ");
   }
   const sub = w.addText(line);
@@ -767,81 +799,105 @@ function rectangularWidget(d, error) {
   return w;
 }
 
-function riskRow(w, label, r) {
+// Risk line: label, room / limit in color, and a colored progress bar below
+function riskRow(w, label, r, barWidth) {
   const q = ratio(r);
+  const color = riskColor(q);
   const row = w.addStack();
   row.centerAlignContent();
   const l = row.addText(label);
   l.font = Font.mediumSystemFont(11);
-  l.textColor = Color.white();
-  l.textOpacity = 0.8;
+  l.textColor = THEME.muted;
   l.lineLimit = 1;
   row.addSpacer();
   const v = row.addText(`${money0(r.room)} / ${money0(r.limit)}`);
   v.font = Font.semiboldMonospacedSystemFont(11);
-  v.textColor = riskColor(q);
+  v.textColor = color;
   v.lineLimit = 1;
-  w.addSpacer(2);
+  w.addSpacer(3);
+  const img = w.addImage(barImage(q || 0, barWidth, color));
+  img.imageSize = new Size(barWidth, 6);
+  w.addSpacer(5);
 }
 
 // Home screen: small / medium / large
 function homeWidget(d, error, family) {
   const w = new ListWidget();
-  w.backgroundColor = new Color("#111214");
+  const bg = new LinearGradient();
+  bg.colors = [THEME.bgTop, THEME.bgBottom];
+  bg.locations = [0, 1];
+  w.backgroundGradient = bg;
   w.setPadding(14, 14, 14, 14);
+  const barWidth = family === "small" ? 128 : 300;
 
   const head = w.addStack();
   head.centerAlignContent();
-  const title = head.addText("RiskPeek");
-  title.font = Font.semiboldSystemFont(12);
-  title.textColor = Color.white();
-  title.textOpacity = 0.7;
+  const logo = head.addText("▲ RiskPeek");
+  logo.font = Font.boldRoundedSystemFont(12);
+  logo.textColor = THEME.accent;
+  logo.lineLimit = 1;
   head.addSpacer();
-  const age = head.addText(`${dataTime(d)} · ↻ ${runTime(d)}`);
-  age.font = Font.systemFont(10);
-  age.textOpacity = 0.7;
-  age.textColor = error || isStale(d) ? new Color("#FFD60A") : Color.white();
+  const time = head.addText(refreshLabel(d, error));
+  time.font = Font.semiboldSystemFont(10);
+  time.textColor = error || isStale(d) ? THEME.amber : THEME.muted;
+  time.lineLimit = 1;
 
   w.addSpacer(6);
-  const v = w.addText(`${fmt(d.floating)} ${cur(d)}`);
+  const v = w.addText(`${arrow(d.floating)} ${fmt(d.floating)} ${cur(d)}`);
   v.font = Font.boldRoundedSystemFont(family === "small" ? 22 : 26);
   v.textColor = pnlColor(d.floating);
   v.minimumScaleFactor = 0.5;
   v.lineLimit = 1;
 
-  const sub = w.addText(
-    (d.today !== null && d.today !== undefined ? `${L.day} ${fmt(d.today)} · ` : "") + `${L.eq} ${money0(d.equity)}`
-  );
-  sub.font = Font.systemFont(11);
-  sub.textColor = Color.white();
-  sub.textOpacity = 0.7;
-  sub.lineLimit = 1;
-  sub.minimumScaleFactor = 0.7;
+  const sub = w.addStack();
+  sub.centerAlignContent();
+  if (d.today !== null && d.today !== undefined) {
+    const dl = sub.addText(`${L.day} `);
+    dl.font = Font.systemFont(11);
+    dl.textColor = THEME.muted;
+    const dv = sub.addText(fmt(d.today));
+    dv.font = Font.semiboldSystemFont(11);
+    dv.textColor = pnlColor(d.today);
+    const sep = sub.addText(" · ");
+    sep.font = Font.systemFont(11);
+    sep.textColor = THEME.muted;
+  }
+  const eq = sub.addText(`${L.eq} ${money0(d.equity)}`);
+  eq.font = Font.systemFont(11);
+  eq.textColor = THEME.muted;
+  eq.lineLimit = 1;
 
   const risks = [];
   if (d.dl) risks.push([family === "small" ? L.dlShort : L.dl, d.dl]);
   if (d.dd && family !== "small") risks.push([L.dd, d.dd]);
   if (risks.length) {
-    w.addSpacer(6);
-    risks.forEach(([label, r]) => riskRow(w, label, r));
+    w.addSpacer(8);
+    risks.forEach(([label, r]) => riskRow(w, label, r, barWidth));
   }
 
-  const base = family === "small" ? 2 : family === "medium" ? 3 : 10;
-  const max = Math.max(0, base - risks.length);
+  // Positions that still fit under the risk bars
+  const n = risks.length;
+  const max = family === "small" ? (n ? 1 : 2) : family === "medium" ? [3, 1, 0][n] : 10 - 2 * n;
   const list = [...(d.positions || [])].sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl));
-  w.addSpacer(risks.length ? 4 : 8);
-  if (list.length === 0) {
+  w.addSpacer(risks.length ? 2 : 8);
+  if (list.length === 0 && max > 0) {
     const t = w.addText(L.noPosition);
     t.font = Font.systemFont(11);
-    t.textColor = Color.gray();
+    t.textColor = THEME.muted;
   }
   for (const p of list.slice(0, max)) {
     const row = w.addStack();
     row.centerAlignContent();
-    const name = row.addText(`${p.side === "buy" ? "↑" : "↓"} ${p.sym} ${p.vol}`);
-    name.font = Font.mediumSystemFont(11);
-    name.textColor = Color.white();
+    const side = row.addText(p.side === "buy" ? "▲ " : "▼ ");
+    side.font = Font.boldSystemFont(9);
+    side.textColor = p.side === "buy" ? THEME.buy : THEME.sell;
+    const name = row.addText(`${p.sym} `);
+    name.font = Font.semiboldSystemFont(11);
+    name.textColor = THEME.text;
     name.lineLimit = 1;
+    const vol = row.addText(String(p.vol));
+    vol.font = Font.systemFont(10);
+    vol.textColor = THEME.muted;
     row.addSpacer();
     const pv = row.addText(fmt(p.pnl));
     pv.font = Font.semiboldMonospacedSystemFont(11);
@@ -851,7 +907,7 @@ function homeWidget(d, error, family) {
   if (list.length > max && max > 0) {
     const more = w.addText(L.more(list.length - max));
     more.font = Font.systemFont(10);
-    more.textColor = Color.gray();
+    more.textColor = THEME.muted;
   }
   w.addSpacer();
   return w;
